@@ -26,11 +26,12 @@ class NesGui ():
     def __init__(self):
         self.__dict__ = self.__shared_state
         self.commandRunner = None
+        self.romFullPath = {}
         self.initialize ()
 
     def gtk_main_quit ( self, window ):
         gtk.main_quit ()
-        
+
     def startOptions (self, widget):
         self.optionsDialog.run ()
         self.optionsDialog.hide ()
@@ -46,10 +47,13 @@ class NesGui ():
 
     def getRomList (self, path, keywords=None):
         self.clearTreeStore ()
-        try:
-            fileList = os.listdir (path)
-        except:
-            fileList = []
+
+        fileList = []
+        for dirpath, dirnames, filenames in os.walk (path):
+            fileList.extend (filenames)
+            for rom in filenames:
+                self.romFullPath[rom] = os.path.join (dirpath, rom)
+
         fileList.sort ()
         keywords = self.keywords.get_text ().split ()
 
@@ -63,7 +67,7 @@ class NesGui ():
         for i in range (len (keywords)):
             keyword = keywords[i]
 
-            if (re.search (keyword, file, re.I) and 
+            if (re.search (keyword, file, re.I) and
                 i == len (keywords) - 1):
                 return True
             elif re.search (keyword, file, re.I):
@@ -74,24 +78,22 @@ class NesGui ():
     def getSelectedRom (self):
         selection = self.treeview.get_selection ()
         (model, iter) = selection.get_selected ()
-        cwd = self.romPath.get_text ()
-        return '/'.join ([cwd,
-                        self.treestore.get (iter,0)[0]])
+        return self.treestore.get (iter,0)[0]
 
     def killEmulator (self):
         if sys.platform == 'linux2':
             os.system ('killall ' + Constants.EMULATOR)
         else:
             pass #This would be a windows command
-        
+
     def runEmulator (self, arg1=None, arg2=None):
         print '#' * 50
-        if (self.commandRunner != None and 
+        if (self.commandRunner != None and
             self.commandRunner.isAlive ()):
             self.killEmulator ()
 
-        romFile = '"' + self.getSelectedRom () + '"'
-        cmd = ' '.join ([Constants.EMULATOR, romFile])
+        romFile = self.romFullPath[self.getSelectedRom ()]
+        cmd = '%s "%s"' % (Constants.EMULATOR, romFile)
         self.commandRunner = CommandRunner (cmd)
         self.commandRunner.start ()
 
@@ -99,13 +101,13 @@ class NesGui ():
         if event.type == gtk.gdk._2BUTTON_PRESS:
             self.runEmulator (None, None)
         elif (event.type == gtk.gdk.KEY_PRESS and
-            gtk.gdk.keyval_name (event.keyval) == 'Return'):
+              gtk.gdk.keyval_name (event.keyval) == 'Return'):
             self.runEmulator (None, None)
-        return
+            return
 
     def handleEntryEvent (self, widget):
-        self.getRomList (self.romPath.get_text (), 
-                        self.keywords.get_text ())
+        self.getRomList (self.romPath.get_text (),
+                         self.keywords.get_text ())
 
     def _setSettings (self):
         self.screenSize = 1
@@ -130,11 +132,11 @@ class NesGui ():
         self.treestore = gtk.TreeStore (str)
 
         self.getRomList (Constants.DEFAULT_ROM_PATH)
-        
+
         # add columns:
         cell0 = gtk.CellRendererText ()
-        col0 = gtk.TreeViewColumn ('Filename', cell0,    
-                                  text=0)
+        col0 = gtk.TreeViewColumn ('Filename', cell0,
+                                   text=0)
         self.treeview.append_column (col0)
         self.treeview.set_model (self.treestore)
         self.treeview.set_reorderable (True)
